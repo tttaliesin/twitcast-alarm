@@ -3,14 +3,14 @@ import 'package:http/http.dart' as http;
 
 /// 트위캐스트 API 통신을 담당하는 서비스
 class TwitcastApi {
-  /// 재시도 설정
-  static const int maxRetries = 3;
-  static const Duration retryDelay = Duration(seconds: 2);
-
   /// 트위캐스트 스트림이 라이브 상태인지 확인
   /// yt-dlp와 유사하게 스트림 정보를 가져오는 함수
   /// 네트워크 오류 시 자동으로 재시도
-  static Future<bool> isStreamLive(String url) async {
+  static Future<bool> isStreamLive(
+    String url, {
+    int maxRetries = 3,
+    Duration retryDelay = const Duration(seconds: 2),
+  }) async {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await _checkStreamLiveInternal(url);

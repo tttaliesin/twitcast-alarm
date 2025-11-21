@@ -16,6 +16,9 @@ class StreamMonitorService extends ChangeNotifier {
   final SharedPreferences _prefs;
   final List<StreamInfo> _streams = List.generate(4, (_) => StreamInfo(url: ''));
   double _alarmVolume = 1.0;
+  int _maxRetries = 3;
+  int _retryDelaySeconds = 2;
+  int _checkIntervalSeconds = 30;
   Timer? _monitoringTimer;
   Timer? _alarmStopTimer;
   final Set<int> _alreadyNotified = {}; // 이미 알림을 보낸 스트림 인덱스
@@ -23,7 +26,9 @@ class StreamMonitorService extends ChangeNotifier {
 
   static const String _keyStreams = 'streams';
   static const String _keyVolume = 'volume';
-  static const int _checkIntervalSeconds = 30; // 30초마다 체크
+  static const String _keyMaxRetries = 'max_retries';
+  static const String _keyRetryDelay = 'retry_delay_seconds';
+  static const String _keyCheckInterval = 'check_interval_seconds';
 
   StreamMonitorService(this._prefs) {
     _loadSettings();
@@ -45,6 +50,9 @@ class StreamMonitorService extends ChangeNotifier {
 
   List<StreamInfo> get streams => List.unmodifiable(_streams);
   double get alarmVolume => _alarmVolume;
+  int get maxRetries => _maxRetries;
+  int get retryDelaySeconds => _retryDelaySeconds;
+  int get checkIntervalSeconds => _checkIntervalSeconds;
   bool get isAlarmPlaying => _isAlarmPlaying;
 
   /// SharedPreferences에서 설정 로드
@@ -62,6 +70,11 @@ class StreamMonitorService extends ChangeNotifier {
       // 볼륨 로드
       _alarmVolume = _prefs.getDouble(_keyVolume) ?? 1.0;
 
+      // 재시도 설정 로드
+      _maxRetries = _prefs.getInt(_keyMaxRetries) ?? 3;
+      _retryDelaySeconds = _prefs.getInt(_keyRetryDelay) ?? 2;
+      _checkIntervalSeconds = _prefs.getInt(_keyCheckInterval) ?? 30;
+
       notifyListeners();
     } catch (e) {
       print('설정 로드 오류: $e');
@@ -77,6 +90,11 @@ class StreamMonitorService extends ChangeNotifier {
 
       // 볼륨 저장
       await _prefs.setDouble(_keyVolume, _alarmVolume);
+
+      // 재시도 설정 저장
+      await _prefs.setInt(_keyMaxRetries, _maxRetries);
+      await _prefs.setInt(_keyRetryDelay, _retryDelaySeconds);
+      await _prefs.setInt(_keyCheckInterval, _checkIntervalSeconds);
     } catch (e) {
       print('설정 저장 오류: $e');
     }
@@ -138,11 +156,34 @@ class StreamMonitorService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 재시도 횟수 업데이트
+  Future<void> updateMaxRetries(int retries) async {
+    _maxRetries = retries.clamp(1, 10);
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 재시도 간격 업데이트
+  Future<void> updateRetryDelay(int seconds) async {
+    _retryDelaySeconds = seconds.clamp(1, 10);
+    await _saveSettings();
+    notifyListeners();
+  }
+
+  /// 확인 간격 업데이트
+  Future<void> updateCheckInterval(int seconds) async {
+    _checkIntervalSeconds = seconds.clamp(10, 300);
+    await _saveSettings();
+    // 타이머 재시작
+    _startMonitoring();
+    notifyListeners();
+  }
+
   /// 모니터링 타이머 시작
   void _startMonitoring() {
     _monitoringTimer?.cancel();
     _monitoringTimer = Timer.periodic(
-      const Duration(seconds: _checkIntervalSeconds),
+      Duration(seconds: _checkIntervalSeconds),
       (_) => _checkAllStreams(),
     );
   }
@@ -165,8 +206,12 @@ class StreamMonitorService extends ChangeNotifier {
     if (stream.url.isEmpty) return;
 
     try {
-      // 스트림 상태 확인
-      final isLive = await TwitcastApi.isStreamLive(stream.url);
+      // 스트림 상태 확인 (설정된 재시도 값 사용)
+      final isLive = await TwitcastApi.isStreamLive(
+        stream.url,
+        maxRetries: _maxRetries,
+        retryDelay: Duration(seconds: _retryDelaySeconds),
+      );
 
       _streams[index] = stream.copyWith(isLive: isLive);
 
