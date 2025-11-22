@@ -11,6 +11,9 @@
     <!-- Foreground Service 데이터 동기화 권한 (Android 14 이상) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
+    <!-- Foreground Service 미디어 재생 권한 (Android 14 이상) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <!-- 오디오 재생 권한 -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -22,6 +25,9 @@
 
     <!-- 부팅 완료 수신: 재부팅 후 모니터링 재시작 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- 배터리 최적화 예외 요청 권한 (Android 6.0 이상) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:label="스드트캐안놓앱"
@@ -61,6 +67,6 @@
             android:name=".StreamMonitorService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|mediaPlayback" />
     </application>
 </manifest>
