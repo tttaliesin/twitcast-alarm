@@ -16,7 +16,10 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.twitcast.alarm/background"
+    private val ALARM_CHANNEL = "com.twitcast.alarm/native_alarm"
     private var methodChannel: MethodChannel? = null
+    private var alarmChannel: MethodChannel? = null
+    private var nativeAlarmPlayer: NativeAlarmPlayer? = null
 
     // 스트림 체크 브로드캐스트 리시버
     // 백그라운드 서비스에서 스트림 체크가 필요할 때 이 리시버가 호출됨
@@ -32,6 +35,10 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // 네이티브 알람 플레이어 초기화
+        nativeAlarmPlayer = NativeAlarmPlayer(this)
+
+        // 백그라운드 서비스 채널
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         methodChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -56,6 +63,27 @@ class MainActivity: FlutterActivity() {
             }
         }
 
+        // 네이티브 알람 채널
+        alarmChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ALARM_CHANNEL)
+        alarmChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "playAlarm" -> {
+                    val volume = call.argument<Double>("volume")?.toFloat() ?: 1.0f
+                    nativeAlarmPlayer?.playAlarm(volume)
+                    result.success(true)
+                }
+                "stopAlarm" -> {
+                    nativeAlarmPlayer?.stopAlarm()
+                    result.success(true)
+                }
+                "isPlaying" -> {
+                    val playing = nativeAlarmPlayer?.isPlaying() ?: false
+                    result.success(playing)
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // Register broadcast receiver
         val filter = IntentFilter(StreamMonitorService.ACTION_CHECK_STREAMS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -72,6 +100,7 @@ class MainActivity: FlutterActivity() {
         } catch (e: Exception) {
             // Receiver might not be registered
         }
+        nativeAlarmPlayer?.dispose()
     }
 
     private fun isServiceRunning(serviceClass: Class<*>): Boolean {

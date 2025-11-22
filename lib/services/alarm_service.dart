@@ -1,10 +1,12 @@
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 알람 사운드 재생/중지를 담당하는 서비스
 class AlarmService {
   static AudioPlayer? _audioPlayer;
   static bool _isPlaying = false;
+  static const _platform = MethodChannel('com.twitcast.alarm/native_alarm');
 
   /// 지정된 볼륨으로 알람 사운드 재생
   static Future<void> playAlarm(double volume) async {
@@ -14,7 +16,20 @@ class AlarmService {
         await stopAlarm();
       }
 
-      // 새 AudioPlayer 인스턴스 생성
+      // Android에서는 네이티브 알람 플레이어 사용 (무음모드에서도 작동)
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await _platform.invokeMethod('playAlarm', {'volume': volume});
+          _isPlaying = true;
+          print('✅ 네이티브 알람 재생 시작 (무음모드 지원)');
+          return;
+        } catch (e) {
+          print('❌ 네이티브 알람 재생 오류, audioplayers로 폴백: $e');
+          // 네이티브 재생 실패 시 아래 audioplayers로 폴백
+        }
+      }
+
+      // Windows 또는 네이티브 재생 실패 시 audioplayers 사용
       _audioPlayer = AudioPlayer();
 
       // 볼륨 설정 (0.0 ~ 1.0)
@@ -44,6 +59,16 @@ class AlarmService {
   /// 알람 중지
   static Future<void> stopAlarm() async {
     try {
+      // Android 네이티브 알람 중지 시도
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        try {
+          await _platform.invokeMethod('stopAlarm');
+        } catch (e) {
+          print('❌ 네이티브 알람 중지 오류: $e');
+        }
+      }
+
+      // audioplayers 중지
       if (_audioPlayer != null) {
         await _audioPlayer!.stop();
         await _audioPlayer!.dispose();
