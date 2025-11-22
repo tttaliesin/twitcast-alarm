@@ -52,10 +52,10 @@ class NativeAlarmPlayer(private val context: Context) {
                 // 준비 및 재생
                 prepare()
                 start()
-
-                isPlaying = true
-                Log.d("NativeAlarmPlayer", "✅ 알람 재생 시작 (볼륨: $volume)")
             }
+
+            isPlaying = true
+            Log.d("NativeAlarmPlayer", "✅ 알람 재생 시작 (볼륨: $volume)")
         } catch (e: Exception) {
             Log.e("NativeAlarmPlayer", "❌ 알람 재생 오류: ${e.message}", e)
             isPlaying = false
