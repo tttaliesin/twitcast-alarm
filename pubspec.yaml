@@ -31,6 +31,9 @@ dependencies:
   # State management
   provider: ^6.1.1
 
+  # Permission handling
+  permission_handler: ^11.0.1
+
   # Icons
   cupertino_icons: ^1.0.6
 

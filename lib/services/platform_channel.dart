@@ -57,12 +57,31 @@ class PlatformChannel {
 
   /// 스트림 체크 콜백 등록 (Android 전용)
   /// 백그라운드에서 스트림을 체크해야 할 때 호출될 핸들러 설정
+  static Function()? _streamCheckHandler;
+  static Function(String)? _alarmPlayingHandler;
+
   static void setStreamCheckHandler(Function() handler) {
     if (!Platform.isAndroid) return;
+    _streamCheckHandler = handler;
+    _setupMethodCallHandler();
+  }
 
+  /// 알람 재생 콜백 등록 (Android 전용)
+  /// 백그라운드 서비스에서 알람이 재생될 때 호출될 핸들러 설정
+  static void setAlarmPlayingHandler(Function(String streamUrl) handler) {
+    if (!Platform.isAndroid) return;
+    _alarmPlayingHandler = handler;
+    _setupMethodCallHandler();
+  }
+
+  /// 메서드 콜 핸들러 설정
+  static void _setupMethodCallHandler() {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'checkStreams') {
-        handler();
+        _streamCheckHandler?.call();
+      } else if (call.method == 'onAlarmPlaying') {
+        final streamUrl = call.arguments['streamUrl'] as String? ?? '';
+        _alarmPlayingHandler?.call(streamUrl);
       }
     });
   }

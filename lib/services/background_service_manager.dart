@@ -5,16 +5,22 @@ import 'windows_background_service.dart';
 /// 모든 플랫폼을 위한 통합 백그라운드 서비스 관리자
 class BackgroundServiceManager {
   static bool _isInitialized = false;
+  static Function()? _streamCheckCallback;
 
   /// 백그라운드 서비스 초기화
-  static Future<void> initialize() async {
+  static Future<void> initialize({
+    Function()? onStreamCheck,
+  }) async {
     if (_isInitialized) return;
+
+    _streamCheckCallback = onStreamCheck;
 
     if (Platform.isAndroid) {
       // Android 전용 초기화
       print('Android 백그라운드 서비스 초기화 중');
       PlatformChannel.setStreamCheckHandler(() {
-        print('백그라운드 서비스에 의해 스트림 체크 트리거됨');
+        print('🔔 백그라운드 브로드캐스트 수신 -> 스트림 체크 실행');
+        _streamCheckCallback?.call();
       });
     } else if (Platform.isWindows) {
       // Windows 전용 초기화

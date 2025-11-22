@@ -38,12 +38,28 @@ class StreamMonitorService extends ChangeNotifier {
 
   /// 백그라운드 서비스 초기화
   Future<void> _initializeBackgroundServices() async {
-    await BackgroundServiceManager.initialize();
+    await BackgroundServiceManager.initialize(
+      onStreamCheck: _checkAllStreams,
+    );
 
     // Android 백그라운드 체크를 위한 핸들러 설정
     if (Platform.isAndroid) {
       PlatformChannel.setStreamCheckHandler(() {
+        print('🔔 백그라운드 서비스에서 스트림 체크 요청됨');
         _checkAllStreams();
+      });
+
+      // 백그라운드 알람 재생 핸들러 설정
+      PlatformChannel.setAlarmPlayingHandler((streamUrl) {
+        print('🔴 백그라운드에서 알람 재생됨: $streamUrl');
+        _isAlarmPlaying = true;
+        notifyListeners();
+
+        // 30초 후 자동으로 알람 중지
+        _alarmStopTimer?.cancel();
+        _alarmStopTimer = Timer(const Duration(seconds: 30), () {
+          stopAlarm();
+        });
       });
     }
   }
@@ -64,6 +80,18 @@ class StreamMonitorService extends ChangeNotifier {
         final List<dynamic> decoded = json.decode(streamsJson);
         for (int i = 0; i < decoded.length && i < 4; i++) {
           _streams[i] = StreamInfo.fromJson(decoded[i]);
+
+          // SharedPreferences에서 최신 isLive 상태 로드 (백그라운드와 동기화)
+          final isLive = _prefs.getBool('stream_${i}_is_live');
+          if (isLive != null) {
+            _streams[i] = _streams[i].copyWith(isLive: isLive);
+          }
+
+          // alreadyNotified 상태도 로드
+          final alreadyNotified = _prefs.getBool('stream_${i}_already_notified') ?? false;
+          if (alreadyNotified) {
+            _alreadyNotified.add(i);
+          }
         }
       }
 
@@ -76,6 +104,13 @@ class StreamMonitorService extends ChangeNotifier {
       _checkIntervalSeconds = _prefs.getInt(_keyCheckInterval) ?? 30;
 
       notifyListeners();
+
+      // 모니터링 중인 스트림이 있으면 백그라운드 서비스 시작
+      final hasMonitoring = _streams.any((s) => s.isMonitoring);
+      if (hasMonitoring && Platform.isAndroid) {
+        print('🚀 앱 시작 시 모니터링 중인 스트림 발견 - 백그라운드 서비스 시작');
+        await _updateBackgroundService();
+      }
     } catch (e) {
       print('설정 로드 오류: $e');
     }
@@ -84,9 +119,15 @@ class StreamMonitorService extends ChangeNotifier {
   /// SharedPreferences에 설정 저장
   Future<void> _saveSettings() async {
     try {
-      // 스트림 저장
+      // 스트림 저장 (JSON)
       final streamsJson = json.encode(_streams.map((s) => s.toJson()).toList());
       await _prefs.setString(_keyStreams, streamsJson);
+
+      // 네이티브 서비스를 위해 개별 스트림 정보도 저장
+      for (int i = 0; i < _streams.length; i++) {
+        await _prefs.setString('stream_${i}_url', _streams[i].url);
+        await _prefs.setBool('stream_${i}_monitoring', _streams[i].isMonitoring);
+      }
 
       // 볼륨 저장
       await _prefs.setDouble(_keyVolume, _alarmVolume);
@@ -123,18 +164,21 @@ class StreamMonitorService extends ChangeNotifier {
       // 모니터링 중지 시 알림 상태 초기화
       if (!newMonitoringState) {
         _alreadyNotified.remove(index);
+        await _prefs.setBool('stream_${index}_already_notified', false);
+        print('💾 모니터링 중지: stream_${index}_already_notified = false');
       }
 
       await _saveSettings();
+
+      // 모니터링 중인 스트림 여부에 따라 백그라운드 서비스 먼저 시작/중지
+      await _updateBackgroundService();
+
       notifyListeners();
 
-      // 모니터링 시작 시 즉시 체크
+      // 모니터링 시작 시 즉시 체크 (백그라운드 서비스 시작 후)
       if (newMonitoringState && stream.url.isNotEmpty) {
         await _checkStream(index);
       }
-
-      // 모니터링 중인 스트림 여부에 따라 백그라운드 서비스 시작/중지
-      await _updateBackgroundService();
     }
   }
 
@@ -190,12 +234,19 @@ class StreamMonitorService extends ChangeNotifier {
 
   /// 모든 모니터링 중인 스트림 확인
   Future<void> _checkAllStreams() async {
+    print('📡 모든 스트림 확인 시작 (${DateTime.now()})');
+    int checkedCount = 0;
+
     for (int i = 0; i < _streams.length; i++) {
       final stream = _streams[i];
       if (stream.isMonitoring && stream.url.isNotEmpty) {
+        print('  → 스트림 $i 확인 중: ${stream.url}');
         await _checkStream(i);
+        checkedCount++;
       }
     }
+
+    print('✅ 스트림 확인 완료: $checkedCount개 확인됨');
   }
 
   /// 단일 스트림 상태 확인
@@ -215,19 +266,38 @@ class StreamMonitorService extends ChangeNotifier {
 
       _streams[index] = stream.copyWith(isLive: isLive);
 
-      // 스트림이 라이브이고 아직 알림을 보내지 않았다면 알람 트리거
-      if (isLive) {
-        if (!_alreadyNotified.contains(index)) {
-          _alreadyNotified.add(index);
-          await _triggerAlarm(index);
+      // 현재 라이브 상태를 SharedPreferences에 저장 (백그라운드 서비스와 공유)
+      await _prefs.setBool('stream_${index}_is_live', isLive);
 
-          // ✅ 개선: 모니터링을 중지하지 않고 계속 유지
-          // 이제 스트림이 종료되고 다시 시작해도 자동으로 알림을 받을 수 있음
+      // SharedPreferences에서 알림 여부 확인 (백그라운드 서비스와 공유)
+      final alreadyNotified = _prefs.getBool('stream_${index}_already_notified') ?? false;
+
+      // 스트림이 라이브이고 아직 알림을 보내지 않았다면 알람 트리거
+      if (isLive && !alreadyNotified) {
+        print('🔴 라이브 감지! ${stream.url}');
+
+        // Android: 백그라운드 서비스가 알람 담당 (Flutter는 상태만 저장)
+        // Windows: Flutter가 직접 알람 재생
+        if (Platform.isAndroid) {
+          print('📱 Android - 백그라운드 서비스가 알람 처리');
+        } else {
+          print('💻 Windows - Flutter가 직접 알람 재생');
+          await _triggerAlarm(index);
         }
-      } else {
+
+        // 알림 보냈음을 SharedPreferences에 저장
+        await _prefs.setBool('stream_${index}_already_notified', true);
+        print('💾 알림 상태 저장: stream_${index}_already_notified = true');
+
+        // 메모리 Set도 업데이트
+        _alreadyNotified.add(index);
+      } else if (!isLive && alreadyNotified) {
+        print('⚫ 라이브 종료: ${stream.url} - 알림 상태 리셋');
         // 스트림이 오프라인이 되면 알림 상태 리셋
-        // 이렇게 하면 스트림이 종료 후 다시 라이브 상태가 되면 다시 알림을 받음
+        await _prefs.setBool('stream_${index}_already_notified', false);
         _alreadyNotified.remove(index);
+      } else if (isLive && alreadyNotified) {
+        print('🔴 이미 라이브 중 (알림 이미 보냄): ${stream.url}');
       }
 
       notifyListeners();

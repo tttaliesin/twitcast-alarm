@@ -7,10 +7,28 @@ import 'package:window_manager/window_manager.dart';
 import 'services/stream_monitor_service.dart';
 import 'services/background_service_manager.dart';
 import 'services/system_tray_service.dart';
+import 'services/battery_optimization_service.dart';
+import 'services/notification_permission_service.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Android 권한 요청
+  if (Platform.isAndroid) {
+    // 1. 알림 권한 요청 (Android 13+ 필수)
+    final hasNotificationPermission = await NotificationPermissionService.requestNotificationPermission();
+    if (!hasNotificationPermission) {
+      print('⚠️ 알림 권한이 없습니다. 백그라운드 알림이 작동하지 않을 수 있습니다.');
+    }
+
+    // 2. 배터리 최적화 예외 요청
+    final isIgnoring = await BatteryOptimizationService.isIgnoringBatteryOptimizations();
+    if (!isIgnoring) {
+      // 배터리 최적화 예외 설정 화면으로 이동
+      await BatteryOptimizationService.requestIgnoreBatteryOptimizations();
+    }
+  }
 
   // Windows용 윈도우 매니저 초기화
   if (Platform.isWindows) {

@@ -172,6 +172,89 @@ flutter build apk --release
    - JSON 직렬화/역직렬화 검증
    - 시간 포맷팅 로직 검증
 
+7. **✅ 백그라운드 모니터링 수정**: 앱 백그라운드 실행 시 모니터링 미동작 문제 해결
+   - 백그라운드 서비스 콜백 연결 수정
+   - 사용자 설정값(확인 주기) 백그라운드에 반영
+   - 백그라운드 실행 로그 개선
+
+8. **✅ 배터리 최적화 예외 처리**: Android 백그라운드 지속 실행 보장
+   - 앱 첫 실행 시 배터리 최적화 예외 자동 요청
+   - 배터리 세이버 모드에서도 백그라운드 모니터링 유지
+   - Foreground Service와 배터리 최적화 예외 결합
+
+9. **✅ 네이티브 백그라운드 모니터링 구현**: 앱 종료 후에도 백그라운드 동작
+   - StreamMonitorService에서 직접 HTTP 요청 및 알람 재생
+   - Flutter 앱 종료 후에도 Foreground Service가 스트림 감지
+   - Kotlin 코루틴 기반 비동기 네트워크 처리
+   - Android 14 이상 mediaPlayback Foreground Service 타입 추가
+
+10. **✅ 알림 권한 자동 요청**: Android 13+ 대응
+   - 앱 시작 시 알림 권한 자동 요청 (permission_handler)
+   - 권한 거부 시 설정 화면으로 자동 이동
+   - 배터리 최적화 예외와 함께 통합 관리
+
+11. **✅ 알람 제어 시스템 개선**: 백그라운드/포그라운드 알람 통합 관리
+   - Android: 백그라운드 서비스가 모든 알람 담당
+   - Windows: Flutter가 직접 알람 재생
+   - 알람 중복 재생 문제 해결
+   - 알람 중지 버튼 정상 동작
+
+12. **✅ 앱 재시작 시 백그라운드 서비스 자동 복원**
+   - 모니터링 중인 스트림이 있으면 앱 시작 시 백그라운드 서비스 자동 시작
+   - 앱 완전 종료 후 재시작해도 백그라운드 모니터링 지속
+   - 중지/재시작 없이 바로 백그라운드 동작
+
+## 문제 해결 가이드
+
+### Android 백그라운드 알림이 표시되지 않는 경우
+
+#### 증상
+- 모니터링 토글을 켜도 알림이 나타나지 않음
+- "백그라운드 실행 중인 앱" 목록에 앱이 표시되지 않음
+
+#### 해결 방법
+
+**1. 알림 권한 확인 (Android 13 이상)**
+- 앱 최초 실행 시 알림 권한 팝업이 나타남
+- "허용" 클릭 필요
+- 수동 확인: 설정 → 앱 → 스드트캐안놓앱 → 권한 → 알림
+
+**2. 배터리 최적화 예외 설정**
+- 앱 최초 실행 시 자동으로 설정 화면 이동
+- "허용" 선택 필요
+- 수동 설정: 설정 → 배터리 → 배터리 최적화 → 모든 앱 표시 → 스드트캐안놓앱 → 최적화 안 함
+
+**3. 앱 알림 설정 확인**
+- 설정 → 앱 → 스드트캐안놓앱 → 알림
+- "알림 표시" 및 "스트림 모니터" 채널 활성화 확인
+
+**4. 로그 확인 (개발자용)**
+```bash
+# Android Studio Logcat 또는 ADB 사용
+adb logcat -s StreamMonitorService:D MainActivity:D
+
+# 정상 동작 시 나타나는 로그:
+# MainActivity: 🔵 startBackgroundService 호출됨
+# StreamMonitorService: ✅ StreamMonitorService 생성됨
+# StreamMonitorService: 📍 알림 채널 생성 완료
+# StreamMonitorService: ✅ startForeground() 호출 완료
+# StreamMonitorService: 🚀 백그라운드 모니터링 시작
+```
+
+**5. Foreground Service 권한 문제**
+- Android 14 이상에서 FOREGROUND_SERVICE_MEDIA_PLAYBACK 권한 필요
+- 앱 재설치 시 자동으로 권한 부여됨
+
+### 빌드 경고 관련
+
+#### Java 버전 경고
+```
+warning: [options] source value 8 is obsolete
+```
+- permission_handler 라이브러리가 Java 8로 컴파일되어 발생
+- 앱 동작에는 영향 없음 (경고만 표시됨)
+- 무시해도 정상 작동
+
 ## 알려진 문제점
 
 ### 잠재적 문제
@@ -193,11 +276,13 @@ lib/
     ├── alarm_service.dart                 # 알람 재생/중지 서비스
     ├── twitcast_api.dart                  # 트위캐스트 API 통신
     ├── stream_monitor_service.dart        # 스트림 모니터링 핵심 로직
-    ├── background_service_manager.dart    # 백그라운드 서비스 통합 관리
+    ├── background_service_manager.dart    # ✅ 백그라운드 서비스 통합 관리
     ├── platform_channel.dart              # Android 플랫폼 채널
     ├── windows_background_service.dart    # Windows 백그라운드
     ├── system_tray_service.dart           # 시스템 트레이
-    └── alarm_history_service.dart         # ✅ 알람 히스토리 저장 서비스
+    ├── alarm_history_service.dart         # ✅ 알람 히스토리 저장 서비스
+    ├── battery_optimization_service.dart  # ✅ 배터리 최적화 관리
+    └── notification_permission_service.dart # ✅ 알림 권한 요청 (Android 13+)
 ```
 
 ## 개발 로드맵
@@ -216,6 +301,13 @@ lib/
 - [x] 홈화면, 설정창 에서의 불륨조절 동기화
 - [x] 안드로이드 무음모드 알람 지원 (네이티브 USAGE_ALARM)
 - [x] 유닛 테스트 작성 (StreamInfo, AlarmHistory 모델)
+- [x] 백그라운드 모니터링 미동작 문제 수정
+- [x] 배터리 최적화 예외 처리 (백그라운드 지속 실행)
+- [x] 네이티브 백그라운드 모니터링 구현 (앱 종료 후에도 동작)
+- [x] 알림 권한 자동 요청 (Android 13+ 대응)
+- [x] 백그라운드 서비스 디버깅 로그 추가
+- [x] 알람 제어 시스템 개선 (백그라운드 서비스 통합, 중복 재생 방지)
+- [x] 앱 재시작 시 백그라운드 서비스 자동 복원
 
 ## 라이선스
 
@@ -223,7 +315,7 @@ MIT License
 
 본 프로젝트는 다음 오픈소스 라이브러리 사용:
 - Flutter SDK (BSD-3-Clause)
-- audioplayers, workmanager, system_tray, window_manager, provider (MIT)
+- audioplayers, workmanager, system_tray, window_manager, provider, permission_handler (MIT)
 - http, shared_preferences (BSD-3-Clause)
 
 ## 기여
