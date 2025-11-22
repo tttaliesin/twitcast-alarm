@@ -13,7 +13,102 @@
 - **알람 히스토리**: 모든 알람 발생 기록 저장 및 통계 표시
 - **설정 UI**: 볼륨, 재시도 횟수, 재시도 간격, 확인 주기 등 세부 설정 가능
 
-## 빠른 시작
+## 다운로드 및 설치
+
+### Windows
+1. [Releases](https://github.com/tttaliesin/twitcast-alarm/releases) 페이지에서 최신 버전 다운로드
+2. `twitcast-alarm-windows.zip` 압축 해제
+3. `twitcast_alarm.exe` 실행
+
+### Android
+1. [Releases](https://github.com/tttaliesin/twitcast-alarm/releases) 페이지에서 최신 버전 다운로드
+2. `app-release.apk` 파일을 휴대폰으로 전송
+3. APK 파일 설치 (출처를 알 수 없는 앱 설치 허용 필요)
+
+---
+
+## 개발자용 - 빌드 환경 구성
+
+### Windows에서 빌드하기
+
+#### 1. Visual Studio 설치 (Windows 앱 빌드용)
+1. [Visual Studio 2022](https://visualstudio.microsoft.com/ko/downloads/) Community 버전 다운로드
+2. 설치 시 "C++를 사용한 데스크톱 개발" 워크로드 선택 필수
+3. 설치 완료 (약 6-10GB 필요)
+
+#### 2. Flutter 설치
+1. [Flutter 공식 사이트](https://flutter.dev/docs/get-started/install/windows) 접속
+2. "Get the Flutter SDK" 섹션에서 최신 안정 버전 다운로드
+3. 다운로드한 zip 파일을 `C:\src\flutter` 같은 경로에 압축 해제
+4. 시스템 환경 변수 Path에 `C:\src\flutter\bin` 추가
+   - Windows 검색에서 "환경 변수" 검색
+   - "시스템 환경 변수 편집" 클릭
+   - "환경 변수" 버튼 클릭
+   - "Path" 선택 후 "편집" 클릭
+   - "새로 만들기"로 Flutter bin 경로 추가
+
+#### 3. Android 개발 환경 (Android 앱 빌드용, 선택사항)
+1. [Android Studio](https://developer.android.com/studio) 다운로드 및 설치
+2. Android Studio 실행 후 초기 설정 완료
+3. SDK Manager에서 다음 설치:
+   - Android SDK Platform (최신 버전)
+   - Android SDK Build-Tools
+   - Android SDK Command-line Tools
+4. 환경 변수 설정:
+   - `ANDROID_HOME`: Android SDK 설치 경로 (보통 `C:\Users\사용자명\AppData\Local\Android\Sdk`)
+
+#### 4. Git 설치
+1. [Git 공식 사이트](https://git-scm.com/download/win) 접속
+2. 다운로드 및 설치 (기본 옵션으로 진행)
+
+#### 5. 개발 환경 확인
+명령 프롬프트(cmd) 또는 PowerShell에서 실행:
+```bash
+flutter doctor
+```
+모든 항목에 녹색 체크가 나오면 성공
+
+#### 6. 프로젝트 클론 및 실행
+```bash
+# 프로젝트 다운로드
+git clone https://github.com/tttaliesin/twitcast-alarm.git
+cd twitcast-alarm
+
+# 의존성 설치
+flutter pub get
+
+# Windows 앱 실행
+flutter run -d windows
+
+# Android 앱 실행 (Android 기기 연결 필요)
+flutter run -d android
+```
+
+### Android에서만 빌드하기 (Windows 앱 불필요)
+
+위 2, 3, 4, 5번 단계 진행 후 (Visual Studio 불필요):
+```bash
+# Android APK 빌드
+flutter build apk --release
+```
+빌드된 APK 위치: `build/app/outputs/flutter-apk/app-release.apk`
+
+### 자주 발생하는 문제
+
+**Q: `flutter` 명령어를 찾을 수 없다고 나옵니다**
+- A: 환경 변수 Path에 Flutter bin 경로가 제대로 추가되었는지 확인
+- 명령 프롬프트를 재시작해야 환경 변수가 적용됨
+
+**Q: `flutter doctor`에서 Android 관련 오류가 납니다**
+- A: Android Studio를 실행하고 SDK Manager에서 필요한 구성요소 설치
+- `flutter doctor --android-licenses` 명령어로 라이선스 동의
+
+**Q: Android 기기가 인식되지 않습니다**
+- A: USB 디버깅 활성화 필요
+  1. 설정 → 휴대전화 정보 → 빌드 번호 7회 연속 터치 (개발자 옵션 활성화)
+  2. 설정 → 개발자 옵션 → USB 디버깅 활성화
+
+## 빠른 시작 (개발 환경 구성 완료 후)
 
 ```bash
 flutter pub get
